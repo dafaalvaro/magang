@@ -1,0 +1,20 @@
+{
+    "name": "dafaa/project-magangd",
+    "description": "latihan pembuatan dashboard pada pltu tenayan",
+    "type": "project",
+    "autoload": {
+        "psr-4": {
+            "Dafaa\\ProjectMagangd\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "dafaalvaro",
+            "email": "dafaalvaro48@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "phpoffice/phpspreadsheet": "^3.9"
+    }
+}
