@@ -92,9 +92,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         display: flex;
         justify-content: center;
         align-items: center;
-        background-image: url('bg.jpg');
+        background-image: url('pexels-pixabay-459728.jpg');
         background-size: cover;
         background-position: center;
+    }
+
+    .container {
+        display: flex;
+        align-items: stretch;
+        /* Make containers stretch to the same height */
+        justify-content: center;
+        width: 100%;
+        gap: 0;
+        /* No gap between containers */
     }
 
     .login-container {
@@ -168,40 +178,22 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         background-color: rgba(255, 255, 255, 0.3);
         transform: translateY(-2px);
     }
-
-    .login-container .forgot-password {
-        margin-top: 15px;
-        font-size: 14px;
-        color: rgba(255, 255, 255, 0.7);
-    }
-
-    .login-container .forgot-password a {
-        color: rgba(255, 255, 255, 0.9);
-        text-decoration: none;
-        transition: color 0.3s ease;
-    }
-
-    .login-container .forgot-password a:hover {
-        color: #fff;
-    }
     </style>
 </head>
 
 <body>
-    <div class="login-container">
-        <h2>Silahkan Masuk</h2>
-        <form method="POST" action="">
-            <input type="text" name="username" placeholder="Masukkan Username" required>
-            <input type="password" name="password" placeholder="Masukkan Password" required>
-            <button type="submit">Login</button>
-            <div class="forgot-password">
-                <a href="register.php">Belum punya akun? Daftar disini</a>
-            </div>
-        </form>
-    </div>
+    <div class="container">
+        <div class="login-container">
+            <h2>Silahkan Masuk</h2>
+            <form method="POST" action="">
+                <input type="text" name="username" placeholder="Masukkan Username" required>
+                <input type="password" name="password" placeholder="Masukkan Password" required>
+                <button type="submit">Login</button>
+            </form>
+        </div>
 
-    <!-- SweetAlert2 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <!-- SweetAlert2 JS -->
+        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </body>
 
 </html>

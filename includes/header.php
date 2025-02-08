@@ -84,7 +84,6 @@
                 <div class="collapse navbar-collapse" id="navbarNav">
                     <ul class="navbar-nav mx-auto">
                         <!-- Memusatkan item navbar -->
-                        <!-- Memusatkan item navbar -->
                         <li class="nav-item">
                             <a class="nav-link <?php echo(basename($_SERVER['PHP_SELF']) == 'dashboard.php') ? 'active' : ''; ?>"
                                 href="grafik.php">PLTU TENAYAN </a>

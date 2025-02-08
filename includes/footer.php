@@ -8,9 +8,9 @@
 footer {
     position: relative;
     /* Mengatur posisi footer */
-    bottom: 0;
+    inset-block-end: 0;
     /* Menempatkan footer di bagian bawah */
-    width: 100%;
+    inline-size: 100%;
     /* Memastikan footer memenuhi lebar layar */
     background: linear-gradient(135deg, #43698f, #2c3e50);
     /* Gradasi warna yang sama dengan header */

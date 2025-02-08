@@ -1,11 +1,6 @@
 <?php
 session_start();
 
-if (isset($_GET['logout'])) {
-    session_destroy();
-    header("Location: index.php");
-    exit();
-}
 // Handle logout
 if (isset($_GET['logout'])) {
     session_destroy();
@@ -13,24 +8,74 @@ if (isset($_GET['logout'])) {
     exit();
 }
 
-// Fungsi untuk validasi file
+// Definisikan fungsi validateFile
 function validateFile($filename)
 {
-    $realPath = realpath("uploads/" . $filename);
-    $uploadsDir = realpath("uploads");
+    $allowedExtensions = [
+        'xlsx', 'xls', 'xlsm',
+        'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp',
+        'doc', 'docx', 'docm',
+        'pdf',
+        'ppt', 'pptx', 'pptm',
+        'zip', 'rar', '7z', 'tar', 'gz',
+        'txt', 'log', 'md',
+        'php', 'html', 'css', 'js', 'py', 'java', 'cpp', 'c', 'cs',
+        'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm',
+        'mp3', 'wav', 'ogg', 'wma', 'm4a',
+    ];
 
-    if ($realPath === false || strpos($realPath, $uploadsDir) !== 0) {
-        return false;
+    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+    return in_array($ext, $allowedExtensions);
+}
+// Panggil fungsi validateFile
+if (isset($_FILES['file'])) {
+    $filename = $_FILES['file']['name'];
+    if (validateFile($filename)) {
+        // Proses file jika valid
+    } else {
+        // Tampilkan pesan kesalahan
+    }
+}
+
+// Handle rename file
+if (isset($_GET['rename']) && isset($_GET['new_name'])) {
+    $oldName = $_GET['rename'];
+    $newName = $_GET['new_name'];
+
+    // Get file extension from old name
+    $ext = pathinfo($oldName, PATHINFO_EXTENSION);
+
+    // Add extension to new name if it doesn't have one
+    if (!preg_match('/\.' . $ext . '$/', $newName)) {
+        $newName .= '.' . $ext;
     }
 
-    $allowed = array('xlsx', 'xls', 'xlsm', 'png', 'jpg', 'jpeg');
-    $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
-    return in_array($ext, $allowed);
+    $oldPath = "uploads/" . $oldName;
+    $newPath = "uploads/" . $newName;
+
+    if (file_exists($oldPath) && validateFile($oldName)) {
+        if (rename($oldPath, $newPath)) {
+            $_SESSION['alert'] = [
+                'icon' => 'success',
+                'title' => 'Berhasil!',
+                'text' => 'File berhasil direname',
+            ];
+        } else {
+            $_SESSION['alert'] = [
+                'icon' => 'error',
+                'title' => 'Gagal!',
+                'text' => 'Gagal rename file',
+            ];
+        }
+    }
+    header("Location: dashboard.php");
+    exit();
 }
 
 // Handle delete file
 if (isset($_GET['delete'])) {
     $filename = $_GET['delete'];
+    error_log("Attempting to delete file: " . $filename); // Tambahkan ini untuk debug
 
     if (validateFile($filename)) {
         $filepath = "uploads/" . $filename;
@@ -63,6 +108,43 @@ if (isset($_GET['delete'])) {
     header("Location: dashboard.php");
     exit();
 }
+// Handle file upload
+if (isset($_POST['upload'])) {
+    $target_dir = "uploads/";
+    $target_file = $target_dir . basename($_FILES["file"]["name"]);
+    $filename = preg_replace("/[^a-zA-Z0-9.-]/", "_", basename($_FILES["file"]["name"]));
+    $target_file = $target_dir . $filename;
+    $uploadOk = 1;
+    $fileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+
+    // Check if file already exists
+    if (file_exists($target_file)) {
+        $_SESSION['alert'] = [
+            'icon' => 'error',
+            'title' => 'Gagal!',
+            'text' => 'File dengan nama yang sama sudah ada.',
+        ];
+        header("Location: dashboard.php");
+        exit();
+    }
+
+    // Allow certain file formats
+    if (move_uploaded_file($_FILES["file"]["tmp_name"], $target_file)) {
+        $_SESSION['alert'] = [
+            'icon' => 'success',
+            'title' => 'Berhasil!',
+            'text' => 'File berhasil diupload.',
+        ];
+    } else {
+        $_SESSION['alert'] = [
+            'icon' => 'error',
+            'title' => 'Gagal!',
+            'text' => 'Terjadi kesalahan saat mengupload file.',
+        ];
+    }
+    header("Location: dashboard.php");
+    exit();
+}
 
 include 'includes/header.php';
 ?>
@@ -81,20 +163,111 @@ include 'includes/header.php';
 
 <body>
     <!-- Konten HTML -->
-    <div class="container mt-5">
+    <div class="flex-container">
+        <!-- Form Upload File -->
         <div class="upload-form">
             <h1 class="text-center mb-4">RENDAL OPERASI PLTU TENAYAN</h1>
             <form action="" method="post" enctype="multipart/form-data" class="upload-box">
-                <div class="upload-area mb-3">
-                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                <div class="upload-area mb-3" id="uploadArea">
+                    <i class=" fas fa-cloud-upload-alt upload-icon"></i>
                     <p>Drag & Drop file atau klik untuk memilih</p>
-                    <input type="file" class="form-control" name="file" id="file"
-                        accept=".xlsx, .xls, .xlsm, .png, .jpg, .jpeg" required>
+                    <input type="file" class="form-control" name="file" id="file">
+                    <span class="selected-file-name"></span>
                 </div>
                 <button type="submit" name="upload" class="btn btn-primary btn-lg w-100">
                     <i class="fas fa-upload me-2"></i>Upload File
                 </button>
             </form>
+        </div>
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.querySelector('input[type="file"]');
+            const fileNameDisplay = document.querySelector('.selected-file-name');
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+
+            // Highlight drop zone when item is dragged over it
+            ['dragenter', 'dragover'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, highlight, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                uploadArea.addEventListener(eventName, unhighlight, false);
+            });
+
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function highlight(e) {
+                uploadArea.classList.add('highlight');
+            }
+
+            function unhighlight(e) {
+                uploadArea.classList.remove('highlight');
+            }
+
+            // Handle dropped files
+            uploadArea.addEventListener('drop', handleDrop, false);
+
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                fileInput.files = files;
+                updateFileName(files[0]);
+            }
+
+            // Handle selected files
+            fileInput.addEventListener('change', function(e) {
+                updateFileName(this.files[0]);
+            });
+
+            function updateFileName(file) {
+                if (file) {
+                    fileNameDisplay.textContent = `Selected file: ${file.name}`;
+                    fileNameDisplay.style.display = 'block';
+                } else {
+                    fileNameDisplay.textContent = '';
+                    fileNameDisplay.style.display = 'none';
+                }
+            }
+        });
+        </script>
+
+        <!-- Carousel -->
+        <div class="carousel-container">
+            <div class="carousel">
+                <?php
+$imageFiles = glob("uploads/*.{png,jpg,jpeg}", GLOB_BRACE);
+if (count($imageFiles) > 0) {
+    foreach ($imageFiles as $image) {
+        $imageName = basename($image);
+        echo "
+                    <div class='carousel-slide'>
+                        <img src='uploads/{$imageName}' alt='{$imageName}' class='carousel-image' />
+                    </div>";
+    }
+} else {
+    echo "<p class='no-images'>Tidak ada gambar yang tersedia.</p>";
+}
+?>
+            </div>
+            <button class="carousel-btn prev">❮</button>
+            <button class="carousel-btn next">❯</button>
+            <div class="carousel-dots">
+                <?php if (isset($imageFiles)): ?>
+                <?php for ($i = 0; $i < count($imageFiles); $i++): ?>
+                <div class="dot <?php echo $i === 0 ? 'active' : ''; ?>"></div>
+                <?php endfor; ?>
+                <?php endif; ?>
+            </div>
+            <div class="slide-counter">1 / <?php echo isset($imageFiles) ? count($imageFiles) : 0; ?></div>
         </div>
     </div>
 
@@ -103,9 +276,9 @@ include 'includes/header.php';
     <script>
     document.addEventListener('DOMContentLoaded', function() {
         Swal.fire({
-            icon: '<?php echo $_SESSION['alert']['icon']; ?>',
-            title: '<?php echo $_SESSION['alert']['title']; ?>',
-            text: '<?php echo $_SESSION['alert']['text']; ?>',
+            icon: '<?php echo htmlspecialchars($_SESSION['alert']['icon']); ?>',
+            title: '<?php echo htmlspecialchars($_SESSION['alert']['title']); ?>',
+            text: '<?php echo htmlspecialchars($_SESSION['alert']['text']); ?>',
             showConfirmButton: true,
             timer: 1500 // Otomatis tutup setelah 1.5 detik (opsional)
         });
@@ -114,8 +287,83 @@ include 'includes/header.php';
     <?php
 // Hapus pesan dari session setelah ditampilkan
 unset($_SESSION['alert']);
+endif;
 ?>
-    <?php endif; ?>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const carousel = document.querySelector('.carousel');
+        const slides = document.querySelectorAll('.carousel-slide');
+        const dots = document.querySelectorAll('.dot');
+        const prevBtn = document.querySelector('.carousel-btn.prev');
+        const nextBtn = document.querySelector('.carousel-btn.next');
+        const counter = document.querySelector('.slide-counter');
+
+        let currentSlide = 0;
+        const totalSlides = slides.length;
+
+        function updateCarousel() {
+            carousel.style.transform = `translateX(-${currentSlide * 100}%)`;
+            dots.forEach((dot, index) => {
+                dot.classList.toggle('active', index === currentSlide);
+            });
+            counter.textContent = `${currentSlide + 1} / ${totalSlides}`;
+        }
+
+        function nextSlide() {
+            currentSlide = (currentSlide + 1) % totalSlides;
+            updateCarousel();
+        }
+
+        function prevSlide() {
+            currentSlide = (currentSlide - 1 + totalSlides) % totalSlides;
+            updateCarousel();
+        }
+
+        // Swipe detection for mobile
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        carousel.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+        });
+
+        carousel.addEventListener('touchend', e => {
+            touchEndX = e.changedTouches[0].screenX;
+            handleSwipe();
+        });
+
+        function handleSwipe() {
+            if (touchEndX < touchStartX) {
+                nextSlide();
+            } else if (touchEndX > touchStartX) {
+                prevSlide();
+            }
+        }
+
+        // Event Listeners
+        prevBtn?.addEventListener('click', prevSlide);
+        nextBtn?.addEventListener('click', nextSlide);
+
+        dots.forEach((dot, index) => {
+            dot.addEventListener('click', () => {
+                currentSlide = index;
+                updateCarousel();
+            });
+        });
+
+        // Auto-advance every 5 seconds
+        let autoAdvanceInterval = setInterval(nextSlide, 5000);
+
+        carousel.addEventListener('mouseenter', () => {
+            clearInterval(autoAdvanceInterval);
+        });
+
+        carousel.addEventListener('mouseleave', () => {
+            autoAdvanceInterval = setInterval(nextSlide, 5000);
+        });
+    });
+    </script>
 </body>
 
 </html>
@@ -125,7 +373,8 @@ unset($_SESSION['alert']);
 <!-- Card Layout untuk File -->
 <div class="card-container">
     <?php
-$files = glob("uploads/*.{xlsx,xls,xlsm,png,jpg,jpeg}", GLOB_BRACE);
+$files = glob("uploads/*.{xlsx,xls,xlsm,png,jpg,jpeg,gif,bmp,svg,webp,doc,docx,docm,pdf,ppt,pptx,pptm,zip,rar,7z,tar,gz,txt,log,md,php,html,css,js,py,java,cpp,c,cs,mp4,avi,mov,wmv,flv,webm,mp3,wav,ogg,wma,m4a}", GLOB_BRACE);
+
 if (count($files) > 0) {
     foreach ($files as $file) {
         $file_name = basename($file);
@@ -135,8 +384,37 @@ if (count($files) > 0) {
 
         // Determine icon based on file type
         $icon_class = match ($file_ext) {
+            // Microsoft Excel
             'xlsx', 'xls', 'xlsm' => '<i class="fas fa-file-excel file-icon excel-icon"></i>',
-            'png', 'jpg', 'jpeg' => '<i class="fas fa-file-image file-icon image-icon"></i>',
+
+            // Images
+            'png', 'jpg', 'jpeg', 'gif', 'bmp', 'svg', 'webp' => '<i class="fas fa-file-image file-icon image-icon"></i>',
+
+            // Microsoft Word
+            'doc', 'docx', 'docm' => '<i class="fas fa-file-word file-icon word-icon"></i>',
+
+            // PDF
+            'pdf' => '<i class="fas fa-file-pdf file-icon pdf-icon"></i>',
+
+            // PowerPoint
+            'ppt', 'pptx', 'pptm' => '<i class="fas fa-file-powerpoint file-icon powerpoint-icon"></i>',
+
+            // Archives
+            'zip', 'rar', '7z', 'tar', 'gz' => '<i class="fas fa-file-archive file-icon archive-icon"></i>',
+
+            // Text
+            'txt', 'log', 'md' => '<i class="fas fa-file-alt file-icon text-icon"></i>',
+
+            // Code
+            'php', 'html', 'css', 'js', 'py', 'java', 'cpp', 'c', 'cs' => '<i class="fas fa-file-code file-icon code-icon"></i>',
+
+            // Video
+            'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm' => '<i class="fas fa-file-video file-icon video-icon"></i>',
+
+            // Audio
+            'mp3', 'wav', 'ogg', 'wma', 'm4a' => '<i class="fas fa-file-audio file-icon audio-icon"></i>',
+
+        // Default untuk file lainnya
             default => '<i class="fas fa-file file-icon"></i>'
         };
 
@@ -188,22 +466,6 @@ if (isset($_POST['upload'])) {
                 icon: 'error',
                 title: 'Gagal!',
                 text: 'File sudah ada.',
-                showConfirmButton: true
-            }).then(() => {
-                window.location.href = 'dashboard.php';
-            });
-        </script>";
-        $uploadOk = 0;
-    }
-
-    // Allow certain file formats
-    $allowed = array('xlsx', 'xls', 'xlsm', 'png', 'jpg', 'jpeg');
-    if (!in_array($fileType, $allowed)) {
-        echo "<script>
-            Swal.fire({
-                icon: 'error',
-                title: 'Gagal!',
-                text: 'Format file tidak diizinkan.',
                 showConfirmButton: true
             }).then(() => {
                 window.location.href = 'dashboard.php';
@@ -278,10 +540,170 @@ if (isset($_POST['upload'])) {
     </div>
 </div>
 
+<?php if (isset($_SESSION['alert'])): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    Swal.fire({
+        icon: '<?php echo $_SESSION['alert']['icon']; ?>',
+        title: '<?php echo $_SESSION['alert']['title']; ?>',
+        text: '<?php echo $_SESSION['alert']['text']; ?>',
+        showConfirmButton: true,
+        timer: 1500
+    });
+});
+</script>
+<?php
+unset($_SESSION['alert']);
+endif;
+?>
+
 <style>
-.upload-form {
-    max-width: 600px;
+.selected-file-name {
+    margin-top: 10px;
+    padding: 8px;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    word-break: break-all;
+    display: none;
+}
+
+.upload-area {
+    position: relative;
+    padding: 40px 20px;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+    text-align: center;
+    transition: all 0.3s ease;
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+
+.upload-area.highlight {
+    border-color: #0d6efd;
+    background-color: rgba(13, 110, 253, 0.1);
+}
+
+.upload-area input[type="file"] {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.flex-container {
+    display: flex;
+    gap: 20px;
+    /* Jarak antara form dan carousel */
+    align-items: flex-start;
+    /* Agar elemen sejajar di bagian atas */
+    max-width: 1200px;
+    /* Lebar maksimum container */
     margin: 0 auto;
+    /* Pusatkan container */
+    padding: 20px;
+}
+
+.carousel-container {
+    position: relative;
+    margin: 0 auto 20px;
+    overflow: hidden;
+    border-radius: 15px;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    flex: 1;
+    /* Carousel akan mengambil ruang yang tersedia */
+    max-width: 600px;
+    /* Lebar maksimum carousel */
+}
+
+.carousel {
+    display: flex;
+    transition: transform 0.5s ease-in-out;
+    height: 350px;
+}
+
+.carousel-slide {
+    min-width: 100%;
+    position: relative;
+    cursor: pointer;
+}
+
+.carousel-slide img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.carousel-btn {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 16px;
+    cursor: pointer;
+    border: none;
+    border-radius: 50%;
+    font-size: 20px;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    z-index: 10;
+}
+
+.carousel-btn:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+.carousel-btn.prev {
+    left: 20px;
+}
+
+.carousel-btn.next {
+    right: 20px;
+}
+
+.carousel-dots {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.dot.active {
+    background: white;
+    transform: scale(1.2);
+}
+
+.slide-counter {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 14px;
+    backdrop-filter: blur(5px);
+}
+
+.upload-form {
+    max-inline-size: 600px;
+    margin: 0 auto;
+    flex: 1;
+    /* Form akan mengambil ruang yang tersedia */
 }
 
 .upload-box {
@@ -301,7 +723,7 @@ if (isset($_POST['upload'])) {
 .upload-icon {
     font-size: 48px;
     color: #6c757d;
-    margin-bottom: 10px;
+    margin-block-end: 10px;
 }
 
 .upload-area {
@@ -312,7 +734,7 @@ if (isset($_POST['upload'])) {
 
 .upload-area input[type="file"] {
     position: absolute;
-    width: 100%;
+    inline-size: 100%;
     height: 100%;
     top: 0;
     left: 0;
@@ -545,7 +967,7 @@ if (isset($_POST['upload'])) {
 }
 
 .file-name {
-    display: none;
+
     margin-top: 10px;
     font-size: 14px;
     font-weight: bold;
@@ -555,6 +977,7 @@ if (isset($_POST['upload'])) {
 .highlight {
     border: 2px dashed #4a90e2;
     background-color: rgba(74, 144, 226, 0.1);
+
 }
 </style>
 
@@ -578,7 +1001,8 @@ function renameFile() {
     const newFileName = document.getElementById('newFileName').value;
     const oldFileName = document.getElementById('oldFileName').value;
     if (newFileName && oldFileName) {
-        window.location.href = `?rename=${encodeURIComponent(oldFileName)}&new_name=${encodeURIComponent(newFileName)}`;
+        window.location.href =
+            `dashboard.php?rename=${encodeURIComponent(oldFileName)}&new_name=${encodeURIComponent(newFileName)}`;
     }
 }
 
@@ -590,8 +1014,7 @@ window.onclick = function(event) {
     }
 }
 
-// Ambil elemen yang diperlukan
-const uploadArea = document.querySelector('.upload-area');
+// File upload preview
 const fileInput = document.querySelector('input[type="file"]');
 const fileNameDisplay = document.createElement('span'); // Elemen untuk menampilkan nama file
 
@@ -639,17 +1062,6 @@ function handleDrop(e) {
 fileInput.addEventListener('change', function() {
     displayFileName(fileInput.files);
 });
-
-// Fungsi untuk menampilkan nama file
-function displayFileName(files) {
-    if (files.length > 0) {
-        fileNameDisplay.textContent = `File: ${files[0].name}`;
-        fileNameDisplay.style.display = 'block';
-    } else {
-        fileNameDisplay.textContent = '';
-        fileNameDisplay.style.display = 'none';
-    }
-}
 </script>
 
 <?php include 'includes/footer.php'; ?>
